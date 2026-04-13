@@ -1,4 +1,4 @@
-import express from "express";
+import express, { json } from "express";
 import jwt from "jsonwebtoken"
 import { JWT_SECRET } from "@repo/backend-common/config";
 import { middleware } from "./middleware";
@@ -55,26 +55,71 @@ app.post("/signup", async (req, res) => {
 
 
 
-app.post("/signin", (req, res) => {
-    const data = SigninSchema.safeParse(req.body);
-    const userId = 1;
-    const token = jwt.sign({ userId }, JWT_SECRET)
+app.post("/signin", async (req, res) => {
+    const parsedData = SigninSchema.safeParse(req.body);
+    if (!parsedData.success) {
+        res.json({
+            message: "Invalid Input"
+        })
+        return
+    }
 
+    const user = await prisma.user.findFirst({
+        where: {
+            email: parsedData.data.username,
+            password: parsedData.data.password
+        }
+    })
+
+    if (!user) {
+        res.json({
+            message: "NOt authorized"
+        })
+        return;
+    }
+    const token = jwt.sign({
+        userId: user?.id
+    }, JWT_SECRET)
 
     res.json({
         token
     })
+
 })
 
 
-app.post("/room", middleware, (req, res) => {
+app.post("/room", middleware, async (req, res) => {
 
-    const data = CreatedUserSchema.safeParse(req.body)
+    const parsedData = CreateRoomSchema.safeParse(req.body)
+    if (!parsedData.success) {
+        res.json({
+            message: "Incorrect Inputs"
+        })
+        return;
+    }
+    //@ts-ignore
+    const userId = req.userId
 
 
-    res.json({
-        roomId: 123
-    })
+    try {
+
+        const createdRoom = await prisma.room.create({
+            data: {
+                slug: parsedData.data.name,
+                adminId: userId
+            }
+        })
+        res.json({
+            roomId: createdRoom.id
+        })
+    } catch (error) {
+        res.json({
+            message: "room already exists"
+        })
+    }
+
+
+
 
 })
 
